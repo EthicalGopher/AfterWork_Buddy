@@ -43,7 +43,6 @@ func main() {
 		defer resp.Body.Close()
 
 		dataByte, _ := io.ReadAll(resp.Body)
-		fmt.Println(string(dataByte))
 		var body struct {
 			RefreshToken string `json:"refresh_token"`
 		}
