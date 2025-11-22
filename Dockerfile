@@ -10,4 +10,4 @@ COPY . .
 
 RUN go build -o main
 
-RUN ./main
+CMD ./main
