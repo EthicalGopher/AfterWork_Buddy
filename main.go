@@ -3,22 +3,24 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/EthicalGopher/AfterWork_Buddy/db"
+	"github.com/gofiber/fiber/v2"
+	"github.com/joho/godotenv"
 	"io"
 	"net/http"
 	"strings"
-
-	"github.com/gofiber/fiber/v2"
 )
 
-var User struct {
-	State        string `json:"state"`
-	RefreshToken string `json:"refresh_token"`
+func init() {
+	err := godotenv.Load()
+	if err != nil {
+		panic(err)
+	}
 }
-
-func main() {
+func server() {
 	app := fiber.New()
 	app.Get("/redirect", func(c *fiber.Ctx) error {
-		state := c.Query("client_id") + "and" + c.Query("client_secret")
+		state := c.Query("client_id") + "and" + c.Query("client_secret") + "and" + c.Query("email")
 		url := `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCliq.Channels.CREATE,ZohoCliq.Channels.READ,ZohoCliq.Channels.UPDATE,ZohoCliq.Channels.DELETE&client_id=` + c.Query("client_id") + `&state=` + state + `&response_type=code&redirect_uri=http://localhost:3000/callback&access_type=offline`
 		return c.Redirect(url)
 	})
@@ -43,15 +45,30 @@ func main() {
 		defer resp.Body.Close()
 
 		dataByte, _ := io.ReadAll(resp.Body)
-		var body struct {
-			RefreshToken string `json:"refresh_token"`
-		}
+		var body db.User
+		body.Email = data[2]
 		if err := json.Unmarshal(dataByte, &body); err != nil {
 			return c.JSON(fiber.Map{"error": err.Error()})
 		}
 		fmt.Println(body.RefreshToken)
-		return c.SendString(body.RefreshToken)
+		if err := body.AddUser(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusAccepted).SendString("Success")
 	})
-
+	app.Get("/gettoken", func(c *fiber.Ctx) error {
+		email := c.Query("email")
+		token, err := db.GetRefreshToken(email)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"refresh_token": token})
+	})
 	app.Listen(":3000")
+}
+func main() {
+	db.Connect()
+	server()
+	defer db.Disconnect()
+
 }
