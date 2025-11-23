@@ -15,8 +15,8 @@ import (
 var client *mongo.Client
 
 type User struct {
-	Email        string `bson:"email"`
-	RefreshToken string `bson:"refresh_token"`
+	Email        string `json:"email"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func Connect() {

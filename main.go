@@ -19,7 +19,7 @@ func init() {
 	}
 }
 
-var hostUrl = "https://afterwork-buddy.onrender.com"
+var hostUrl = "http://localhost:3000"
 
 func server() {
 	app := fiber.New()
@@ -49,6 +49,7 @@ func server() {
 		defer resp.Body.Close()
 
 		dataByte, _ := io.ReadAll(resp.Body)
+		fmt.Println(string(dataByte))
 		var body db.User
 		body.Email = data[2]
 		if err := json.Unmarshal(dataByte, &body); err != nil {
