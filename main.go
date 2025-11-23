@@ -19,7 +19,7 @@ func init() {
 	}
 }
 
-var hostUrl = "http://localhost:3000"
+var hostUrl = "https://afterwork-buddy.onrender.com"
 
 func server() {
 	app := fiber.New()
