@@ -52,6 +52,7 @@ func server() {
 		fmt.Println(string(dataByte))
 		var body db.User
 		body.Email = data[2]
+		body.State = state
 		if err := json.Unmarshal(dataByte, &body); err != nil {
 			return c.JSON(fiber.Map{"error": err.Error()})
 		}

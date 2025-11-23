@@ -16,6 +16,7 @@ var client *mongo.Client
 
 type User struct {
 	Email        string `json:"email"`
+	State        string `json:"state"`
 	RefreshToken string `json:"refresh_token"`
 }
 
@@ -63,9 +64,10 @@ func (u *User) AddUser() error {
 }
 
 // Get stored refresh token by email
-func GetRefreshToken(email string) (string, error) {
+func GetRefreshToken(email string) (User, error) {
+	var user User
 	if client == nil {
-		return "", fmt.Errorf("database not connected")
+		return user, fmt.Errorf("database not connected")
 	}
 
 	collection := client.Database("afterwork").Collection("users")
@@ -73,14 +75,13 @@ func GetRefreshToken(email string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var user User
 	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return "", nil // email not registered yet
+			return user, fmt.Errorf("email did not registered") // email not registered yet
 		}
-		return "", err
+		return user, err
 	}
 
-	return user.RefreshToken, nil
+	return user, nil
 }
