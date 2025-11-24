@@ -64,11 +64,28 @@ func server() {
 	})
 	app.Get("/gettoken", func(c *fiber.Ctx) error {
 		email := c.Query("email")
-		token, err := db.GetRefreshToken(email)
+		body, err := db.GetRefreshToken(email)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
-		return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"refresh_token": token})
+		var newBody struct {
+			AccessToken string `json:"access_token"`
+		}
+		data := strings.Split(body.State, "and")
+		reqBody := `refresh_token=` + body.RefreshToken + `&grant_type=refresh_token&scope=ZohoCliq.Channels.CREATE,ZohoCliq.Channels.READ,ZohoCliq.Channels.UPDATE,ZohoCliq.Channels.DELETE&client_id=` + data[0] + `&client_secret=` + data[1] + `&redirect_uri=` + hostUrl + `/callback`
+		resp, err := http.Post(
+			"https://accounts.zoho.com/oauth/v2/token",
+			"application/x-www-form-urlencoded",
+			strings.NewReader(reqBody),
+		)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		dataByte, _ := io.ReadAll(resp.Body)
+		if err := json.Unmarshal(dataByte, &newBody); err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.Status(fiber.StatusAccepted).JSON(newBody)
 	})
 	app.Listen(":3000")
 }
