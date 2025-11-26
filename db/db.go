@@ -14,11 +14,22 @@ import (
 
 var client *mongo.Client
 
+// ------------------- DATA MODELS -------------------
+
 type User struct {
-	Email        string `json:"email"`
-	State        string `json:"state"`
-	RefreshToken string `json:"refresh_token"`
+	Email        string `json:"email" bson:"email"`
+	State        string `json:"state" bson:"state"`
+	RefreshToken string `json:"refresh_token" bson:"refresh_token"`
+	Timer        *Timer `json:"timer,omitempty" bson:"timer,omitempty"`
 }
+
+type Timer struct {
+	StartTime string `json:"start_time" bson:"start_time"`
+	Duration  int    `json:"duration" bson:"duration"`
+	IsDaily   bool   `json:"is_daily" bson:"is_daily"`
+}
+
+// ------------------- CONNECTION -------------------
 
 func Connect() {
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
@@ -34,7 +45,8 @@ func Connect() {
 	if err := client.Ping(context.TODO(), readpref.Primary()); err != nil {
 		panic(err)
 	}
-	fmt.Println("Pinged your deployment. Connected to MongoDB!")
+
+	fmt.Println("Connected to MongoDB!")
 }
 
 func Disconnect() {
@@ -43,9 +55,8 @@ func Disconnect() {
 	}
 }
 
-// ---------------------------------------------------------------------
+// ------------------- USER CRUD -------------------
 
-// Add or update user refresh token
 func (u *User) AddUser() error {
 	if client == nil {
 		return fmt.Errorf("database not connected")
@@ -63,7 +74,6 @@ func (u *User) AddUser() error {
 	return err
 }
 
-// Get stored refresh token by email
 func GetRefreshToken(email string) (User, error) {
 	var user User
 	if client == nil {
@@ -78,10 +88,71 @@ func GetRefreshToken(email string) (User, error) {
 	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return user, fmt.Errorf("email did not registered") // email not registered yet
+			return user, fmt.Errorf("email not registered")
 		}
 		return user, err
 	}
 
 	return user, nil
+}
+
+// ------------------- TIMER FUNCTIONS -------------------
+
+func SaveTimer(email string, timer Timer) error {
+	if client == nil {
+		return fmt.Errorf("database not connected")
+	}
+
+	collection := client.Database("afterwork").Collection("users")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$set": bson.M{
+			"timer": timer,
+		},
+	}
+
+	_, err := collection.UpdateOne(ctx, bson.M{"email": email}, update)
+	return err
+}
+
+func RemoveTimer(email string) error {
+	if client == nil {
+		return fmt.Errorf("database not connected")
+	}
+
+	collection := client.Database("afterwork").Collection("users")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$unset": bson.M{
+			"timer": "",
+		},
+	}
+
+	_, err := collection.UpdateOne(ctx, bson.M{"email": email}, update)
+	return err
+}
+
+func GetTimer(email string) (*Timer, error) {
+	var user User
+	if client == nil {
+		return nil, fmt.Errorf("database not connected")
+	}
+
+	collection := client.Database("afterwork").Collection("users")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+
+	return user.Timer, nil
 }

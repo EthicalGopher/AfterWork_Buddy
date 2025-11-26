@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/EthicalGopher/AfterWork_Buddy/db"
 	"github.com/gofiber/fiber/v2"
@@ -21,6 +23,30 @@ func init() {
 
 var hostUrl = "https://afterwork-buddy.onrender.com"
 
+func runTimer(email string, timezone string) error {
+	isDaily := true
+	for isDaily {
+		userTime, err := db.GetTimer(email)
+		if err != nil {
+			return err
+		}
+		loc, err := time.LoadLocation(timezone)
+		if err != nil {
+			return err
+		}
+
+		now := time.Now()
+		thisTime := now.In(loc)
+		currenttime := thisTime.Format("03:04 PM")
+		if userTime.StartTime == currenttime {
+			//mute function
+			time.Sleep(time.Duration(userTime.Duration) * time.Minute)
+			//unmute function
+			break
+		}
+	}
+	return nil
+}
 func server() {
 	app := fiber.New()
 	app.Get("/redirect", func(c *fiber.Ctx) error {
@@ -86,6 +112,30 @@ func server() {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.Status(fiber.StatusAccepted).JSON(newBody)
+	})
+	app.Post("/settimer", func(c *fiber.Ctx) error {
+		email := c.Query("email")
+		timezone := c.Query("timezone")
+		starttime := c.Query("starttime")
+		duration := c.Query("duration")
+		isDaily := c.Query("isDaily")
+		var err error
+		var timer db.Timer
+		timer.Duration, err = strconv.Atoi(duration)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("%v", err.Error()))
+		}
+		timer.StartTime = starttime
+		timer.IsDaily, err = strconv.ParseBool(isDaily)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("%v", err.Error()))
+		}
+		err = db.SaveTimer(email, timer)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).SendString(fmt.Sprintf("%v", err.Error()))
+		}
+		go runTimer(email, timezone)
+		return c.SendStatus(fiber.StatusCreated)
 	})
 	app.Listen(":3000")
 }
