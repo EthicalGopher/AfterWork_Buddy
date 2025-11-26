@@ -51,7 +51,7 @@ func server() {
 	app := fiber.New()
 	app.Get("/redirect", func(c *fiber.Ctx) error {
 		state := c.Query("client_id") + "and" + c.Query("client_secret") + "and" + c.Query("email")
-		url := `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCliq.Channels.CREATE,ZohoCliq.Channels.READ,ZohoCliq.Channels.UPDATE,ZohoCliq.Channels.DELETE&client_id=` + c.Query("client_id") + `&state=` + state + `&response_type=code&redirect_uri=` + hostUrl + `/callback&access_type=offline`
+		url := `https://accounts.zoho.com/oauth/v2/auth?scope=ZohoCliq.Chats.UPDATE,ZohoCliq.Channels.CREATE,ZohoCliq.Channels.READ,ZohoCliq.Channels.UPDATE,ZohoCliq.Channels.DELETE&client_id=` + c.Query("client_id") + `&state=` + state + `&response_type=code&redirect_uri=` + hostUrl + `/callback&access_type=offline`
 		return c.Redirect(url)
 	})
 	app.Get("/callback", func(c *fiber.Ctx) error {
@@ -98,7 +98,7 @@ func server() {
 			AccessToken string `json:"access_token"`
 		}
 		data := strings.Split(body.State, "and")
-		reqBody := `refresh_token=` + body.RefreshToken + `&grant_type=refresh_token&scope=ZohoCliq.Channels.CREATE,ZohoCliq.Channels.READ,ZohoCliq.Channels.UPDATE,ZohoCliq.Channels.DELETE&client_id=` + data[0] + `&client_secret=` + data[1] + `&redirect_uri=` + hostUrl + `/callback`
+		reqBody := `refresh_token=` + body.RefreshToken + `&grant_type=refresh_token&scope=ZohoCliq.Chats.UPDATE,ZohoCliq.Channels.CREATE,ZohoCliq.Channels.READ,ZohoCliq.Channels.UPDATE,ZohoCliq.Channels.DELETE&client_id=` + data[0] + `&client_secret=` + data[1] + `&redirect_uri=` + hostUrl + `/callback`
 		resp, err := http.Post(
 			"https://accounts.zoho.com/oauth/v2/token",
 			"application/x-www-form-urlencoded",
