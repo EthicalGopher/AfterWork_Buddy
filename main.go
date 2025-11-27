@@ -197,33 +197,39 @@ func server() {
 	app.Post("/settimer", func(c *fiber.Ctx) error {
 		email := c.Query("email")
 		timezone := c.Query("timezone")
-		starttime := c.Query("starttime")
+		starttime := c.Query("start_timer") // FIX
 		duration := c.Query("duration")
-		fmt.Println(duration)
+		isDaily := c.Query("isdaily") // FIX
+		fmt.Println(starttime)
+		// channels=123&channels=456   (Zoho style)
 		channelsBytes := c.Context().QueryArgs().PeekMulti("channels")
 		channels := make([]string, len(channelsBytes))
 		for i, v := range channelsBytes {
 			channels[i] = string(v)
 		}
-		isDaily := c.Query("isDaily")
+		fmt.Println(channels)
+
+		var timer db.Timing
 		var err error
-		var timer db.Timer
+
 		timer.Duration, err = strconv.Atoi(duration)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("%v", err.Error()))
+			return c.Status(500).SendString(err.Error())
 		}
 		timer.StartTime = starttime
 		timer.IsDaily, err = strconv.ParseBool(isDaily)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).SendString(fmt.Sprintf("%v", err.Error()))
+			return c.Status(500).SendString(err.Error())
 		}
-		err = db.SaveTimer(email, timer)
-		if err != nil {
-			return c.Status(fiber.StatusUnauthorized).SendString(fmt.Sprintf("%v", err.Error()))
+
+		if err := db.SaveTimer(email, timer); err != nil {
+			return c.Status(500).SendString(err.Error())
 		}
+
 		go runTimer(email, timezone, channels)
-		return c.SendStatus(fiber.StatusCreated)
+		return c.SendStatus(201)
 	})
+
 	app.Post("/stoptimer", func(c *fiber.Ctx) error {
 		email := c.Query("email")
 		if err := db.RemoveTimer(email); err != nil {

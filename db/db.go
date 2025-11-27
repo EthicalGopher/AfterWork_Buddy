@@ -16,17 +16,17 @@ var client *mongo.Client
 
 // ------------------- DATA MODELS -------------------
 
+type Timing struct {
+	StartTime string `json:"starttime"`
+	Duration  int    `json:"duration"`
+	IsDaily   bool   `json:"isdaily"`
+}
+
 type User struct {
 	Email        string `json:"email"`
 	State        string `json:"state"`
 	RefreshToken string `json:"refresh_token"`
-	Timer        *Timer `json:"timer,omitempty"`
-}
-
-type Timer struct {
-	StartTime string `json:"start_time"`
-	Duration  int    `json:"duration"`
-	IsDaily   bool   `json:"is_daily"`
+	Timer        Timing `json:"timer"`
 }
 
 // ------------------- CONNECTION -------------------
@@ -56,7 +56,6 @@ func Disconnect() {
 }
 
 // ------------------- USER CRUD -------------------
-
 func (u *User) AddUser() error {
 	if client == nil {
 		return fmt.Errorf("database not connected")
@@ -67,10 +66,28 @@ func (u *User) AddUser() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	filter := bson.M{"email": u.Email}
-	update := bson.M{"$set": u}
+	update := bson.M{
+		"$set": bson.M{
+			"email":         u.Email,
+			"state":         u.State,
+			"refresh_token": u.RefreshToken,
+		},
+	}
 
-	_, err := collection.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
+	// Only update timer if provided
+	update["$set"].(bson.M)["timer"] = bson.M{
+		"starttime": u.Timer.StartTime,
+		"duration":  u.Timer.Duration,
+		"isdaily":   u.Timer.IsDaily,
+	}
+
+	_, err := collection.UpdateOne(
+		ctx,
+		bson.M{"email": u.Email},
+		update,
+		options.UpdateOne().SetUpsert(true),
+	)
+
 	return err
 }
 
@@ -98,7 +115,7 @@ func GetRefreshToken(email string) (User, error) {
 
 // ------------------- TIMER FUNCTIONS -------------------
 
-func SaveTimer(email string, timer Timer) error {
+func SaveTimer(email string, timer Timing) error {
 	if client == nil {
 		return fmt.Errorf("database not connected")
 	}
@@ -110,7 +127,11 @@ func SaveTimer(email string, timer Timer) error {
 
 	update := bson.M{
 		"$set": bson.M{
-			"timer": timer,
+			"timer": bson.M{
+				"starttime": timer.StartTime,
+				"duration":  timer.Duration,
+				"isdaily":   timer.IsDaily,
+			},
 		},
 	}
 
@@ -138,10 +159,11 @@ func RemoveTimer(email string) error {
 	return err
 }
 
-func GetTimer(email string) (*Timer, error) {
+func GetTimer(email string) (Timing, error) {
 	var user User
+
 	if client == nil {
-		return nil, fmt.Errorf("database not connected")
+		return user.Timer, fmt.Errorf("database not connected")
 	}
 
 	collection := client.Database("afterwork").Collection("users")
@@ -151,7 +173,7 @@ func GetTimer(email string) (*Timer, error) {
 
 	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
-		return nil, err
+		return user.Timer, err
 	}
 
 	return user.Timer, nil
