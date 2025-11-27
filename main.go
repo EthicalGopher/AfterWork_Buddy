@@ -199,6 +199,7 @@ func server() {
 		timezone := c.Query("timezone")
 		starttime := c.Query("starttime")
 		duration := c.Query("duration")
+		fmt.Println(duration)
 		channelsBytes := c.Context().QueryArgs().PeekMulti("channels")
 		channels := make([]string, len(channelsBytes))
 		for i, v := range channelsBytes {
