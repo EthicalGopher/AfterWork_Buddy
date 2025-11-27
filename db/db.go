@@ -17,16 +17,16 @@ var client *mongo.Client
 // ------------------- DATA MODELS -------------------
 
 type User struct {
-	Email        string `json:"email" bson:"email"`
-	State        string `json:"state" bson:"state"`
-	RefreshToken string `json:"refresh_token" bson:"refresh_token"`
-	Timer        *Timer `json:"timer,omitempty" bson:"timer,omitempty"`
+	Email        string `json:"email"`
+	State        string `json:"state"`
+	RefreshToken string `json:"refresh_token"`
+	Timer        *Timer `json:"timer,omitempty"`
 }
 
 type Timer struct {
-	StartTime string `json:"start_time" bson:"start_time"`
-	Duration  int    `json:"duration" bson:"duration"`
-	IsDaily   bool   `json:"is_daily" bson:"is_daily"`
+	StartTime string `json:"start_time"`
+	Duration  int    `json:"duration"`
+	IsDaily   bool   `json:"is_daily"`
 }
 
 // ------------------- CONNECTION -------------------
