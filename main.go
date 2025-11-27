@@ -113,9 +113,9 @@ func runTimer(email string, timezone string, channels []string) error {
 
 		now := time.Now().In(loc)
 		currenttime := now.Format("13:04")
-
+		fmt.Println("tick tick")
 		if userTime.StartTime == currenttime {
-
+			fmt.Println("got it")
 			// ------------------- MUTE -------------------
 			accessToken, err := refreshAccessToken(email)
 			if err == nil {
