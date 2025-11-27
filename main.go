@@ -112,7 +112,7 @@ func runTimer(email string, timezone string, channels []string) error {
 		}
 
 		now := time.Now().In(loc)
-		currenttime := now.Format("3:04 PM")
+		currenttime := now.Format("03:04")
 
 		if userTime.StartTime == currenttime {
 
