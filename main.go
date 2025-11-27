@@ -68,7 +68,6 @@ func refreshAccessToken(email string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("RefreshToken : ", body.RefreshToken)
 	var newBody struct {
 		AccessToken string `json:"access_token"`
 		Error       string `json:"error"`
