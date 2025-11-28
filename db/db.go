@@ -17,16 +17,16 @@ var client *mongo.Client
 // ------------------- DATA MODELS -------------------
 
 type Timing struct {
-	StartTime string `json:"starttime"`
-	Duration  int    `json:"duration"`
-	IsDaily   bool   `json:"isdaily"`
+	StartTime string `json:"starttime" bson:"starttime"`
+	Duration  int    `json:"duration"  bson:"duration"`
+	IsDaily   bool   `json:"isdaily"   bson:"isdaily"`
 }
 
 type User struct {
-	Email        string `json:"email"`
-	State        string `json:"state"`
-	RefreshToken string `json:"refresh_token"`
-	Timer        Timing `json:"timer"`
+	Email        string `json:"email"         bson:"email"`
+	RefreshToken string `json:"refresh_token" bson:"refresh_token"`
+	State        string `json:"state"         bson:"state"`
+	Timer        Timing `json:"timer"         bson:"timer"`
 }
 
 // ------------------- CONNECTION -------------------
@@ -90,9 +90,9 @@ func (u *User) AddUser() error {
 
 	return err
 }
-
 func GetRefreshToken(email string) (User, error) {
 	var user User
+
 	if client == nil {
 		return user, fmt.Errorf("database not connected")
 	}
@@ -104,12 +104,8 @@ func GetRefreshToken(email string) (User, error) {
 
 	err := collection.FindOne(ctx, bson.M{"email": email}).Decode(&user)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			return user, fmt.Errorf("email not registered")
-		}
 		return user, err
 	}
-
 	return user, nil
 }
 

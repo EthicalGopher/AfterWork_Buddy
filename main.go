@@ -25,7 +25,7 @@ var hostUrl = "https://afterwork-buddy.onrender.com"
 
 func muteChannel(accessToken string, channelId string) error {
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", "https://cliq.zoho.com/api/v2/channels/"+channelId+"/mute", nil)
+	req, err := http.NewRequest("POST", "https://cliq.zoho.com/api/v2/chats/"+channelId+"/mute", nil)
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func muteChannel(accessToken string, channelId string) error {
 
 func unmuteChannel(accessToken string, channelId string) error {
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", "https://cliq.zoho.com/api/v2/channels/"+channelId+"/unmute", nil)
+	req, err := http.NewRequest("POST", "https://cliq.zoho.com/api/v2/chats/"+channelId+"/unmute", nil)
 	if err != nil {
 		return err
 	}
@@ -96,26 +96,20 @@ func runTimer(email string, timezone string, channels []string) error {
 	for {
 		// read DB timer settings *every loop*
 		userTime, err := db.GetTimer(email)
-		if err != nil {
-			// user removed timer → stop goroutine
+		if err != nil || strings.TrimSpace(userTime.StartTime) == "" {
+			fmt.Println("stopped")
 			return nil
 		}
-
-		if !userTime.IsDaily {
-			// if not daily → run only once
-			return nil
-		}
-
 		loc, err := time.LoadLocation(timezone)
 		if err != nil {
 			return err
 		}
 
 		now := time.Now().In(loc)
-		currenttime := now.Format("13:04")
+		currenttime := now.Format("15:04")
 		fmt.Println("tick tick")
 		if userTime.StartTime == currenttime {
-			fmt.Println("got it")
+			fmt.Println("mute")
 			// ------------------- MUTE -------------------
 			accessToken, err := refreshAccessToken(email)
 			if err == nil {
@@ -128,6 +122,7 @@ func runTimer(email string, timezone string, channels []string) error {
 			time.Sleep(time.Duration(userTime.Duration) * time.Minute)
 
 			// ------------------- UNMUTE -------------------
+			fmt.Println("unmute")
 			accessToken, err = refreshAccessToken(email)
 			if err == nil {
 				for _, ch := range channels {
@@ -188,6 +183,7 @@ func server() {
 	})
 	app.Get("/gettoken", func(c *fiber.Ctx) error {
 		email := c.Query("email")
+		fmt.Println(email)
 		accessToken, err := refreshAccessToken(email)
 		if err != nil {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": err.Error()})
@@ -200,14 +196,12 @@ func server() {
 		starttime := c.Query("start_timer") // FIX
 		duration := c.Query("duration")
 		isDaily := c.Query("isdaily") // FIX
-		fmt.Println(starttime)
 		// channels=123&channels=456   (Zoho style)
 		channelsBytes := c.Context().QueryArgs().PeekMulti("channels")
 		channels := make([]string, len(channelsBytes))
 		for i, v := range channelsBytes {
 			channels[i] = string(v)
 		}
-		fmt.Println(channels)
 
 		var timer db.Timing
 		var err error
