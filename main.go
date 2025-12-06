@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/EthicalGopher/AfterWork_Buddy/db"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )
 
@@ -21,7 +24,11 @@ func init() {
 	}
 }
 
-var hostUrl = "https://afterwork-buddy.onrender.com"
+var (
+	hostUrl       = "https://afterwork-buddy.onrender.com"
+	runningTimers = make(map[string]context.CancelFunc)
+	timersMutex   = &sync.Mutex{}
+)
 
 func muteChannel(accessToken string, channelId string) error {
 	client := &http.Client{}
@@ -92,51 +99,44 @@ func refreshAccessToken(email string) (string, error) {
 	}
 	return newBody.AccessToken, nil
 }
-func runTimer(email string, timezone string, channels []string) error {
+func runTimer(ctx context.Context, email string, timezone string, timer db.Timing) {
 	for {
-		// read DB timer settings *every loop*
-		userTime, err := db.GetTimer(email)
-		if err != nil || strings.TrimSpace(userTime.StartTime) == "" {
-			fmt.Println("stopped")
-			return nil
-		}
-		loc, err := time.LoadLocation(timezone)
-		if err != nil {
-			return err
-		}
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			loc, err := time.LoadLocation(timezone)
+			if err != nil {
+				fmt.Printf("error loading location for timer %s: %v\n", timer.ID, err)
+				return
+			}
 
-		now := time.Now().In(loc)
-		currenttime := now.Format("15:04")
-		fmt.Println("tick tick")
-		if userTime.StartTime == currenttime {
-			fmt.Println("mute")
-			// ------------------- MUTE -------------------
-			accessToken, err := refreshAccessToken(email)
-			if err == nil {
-				for _, ch := range channels {
-					_ = muteChannel(accessToken, ch)
+			now := time.Now().In(loc)
+			currenttime := now.Format("15:04")
+			if timer.StartTime == currenttime {
+				accessToken, err := refreshAccessToken(email)
+				if err == nil {
+					for _, ch := range timer.Channels {
+						_ = muteChannel(accessToken, ch)
+					}
+				}
+
+				time.Sleep(time.Duration(timer.Duration) * time.Minute)
+
+				accessToken, err = refreshAccessToken(email)
+				if err == nil {
+					for _, ch := range timer.Channels {
+						_ = unmuteChannel(accessToken, ch)
+					}
+				}
+
+				if !timer.IsDaily {
+					return
 				}
 			}
 
-			// wait duration
-			time.Sleep(time.Duration(userTime.Duration) * time.Minute)
-
-			// ------------------- UNMUTE -------------------
-			fmt.Println("unmute")
-			accessToken, err = refreshAccessToken(email)
-			if err == nil {
-				for _, ch := range channels {
-					_ = unmuteChannel(accessToken, ch)
-				}
-			}
-
-			// if not daily → stop after 1 cycle
-			if !userTime.IsDaily {
-				return nil
-			}
+			time.Sleep(30 * time.Second)
 		}
-
-		time.Sleep(30 * time.Second)
 	}
 }
 
@@ -193,10 +193,9 @@ func server() {
 	app.Post("/settimer", func(c *fiber.Ctx) error {
 		email := c.Query("email")
 		timezone := c.Query("timezone")
-		starttime := c.Query("start_timer") // FIX
+		starttime := c.Query("start_timer")
 		duration := c.Query("duration")
-		isDaily := c.Query("isdaily") // FIX
-		// channels=123&channels=456   (Zoho style)
+		isDaily := c.Query("isdaily")
 		channelsBytes := c.Context().QueryArgs().PeekMulti("channels")
 		channels := make([]string, len(channelsBytes))
 		for i, v := range channelsBytes {
@@ -206,6 +205,8 @@ func server() {
 		var timer db.Timing
 		var err error
 
+		timer.ID = uuid.New().String()
+		timer.Channels = channels
 		timer.Duration, err = strconv.Atoi(duration)
 		if err != nil {
 			return c.Status(500).SendString(err.Error())
@@ -220,22 +221,55 @@ func server() {
 			return c.Status(500).SendString(err.Error())
 		}
 
-		go runTimer(email, timezone, channels)
-		return c.SendStatus(201)
+		ctx, cancel := context.WithCancel(context.Background())
+		timersMutex.Lock()
+		runningTimers[timer.ID] = cancel
+		timersMutex.Unlock()
+
+		go runTimer(ctx, email, timezone, timer)
+		return c.Status(201).JSON(timer)
 	})
 
 	app.Post("/stoptimer", func(c *fiber.Ctx) error {
 		email := c.Query("email")
-		if err := db.RemoveTimer(email); err != nil {
+		id := c.Query("id")
+
+		timersMutex.Lock()
+		cancel, ok := runningTimers[id]
+		if ok {
+			cancel()
+			delete(runningTimers, id)
+		}
+		timersMutex.Unlock()
+
+		if err := db.RemoveTimer(email, id); err != nil {
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 		return c.SendStatus(fiber.StatusAccepted)
-
 	})
 	app.Listen(":3000")
 }
+func startAllTimers() {
+	users, err := db.GetAllUsers()
+	if err != nil {
+		fmt.Printf("could not get users: %v", err)
+		return
+	}
+
+	for _, user := range users {
+		for _, timer := range user.Timers {
+			ctx, cancel := context.WithCancel(context.Background())
+			timersMutex.Lock()
+			runningTimers[timer.ID] = cancel
+			timersMutex.Unlock()
+			go runTimer(ctx, user.Email, "Asia/Kolkata", timer) // assuming timezone
+		}
+	}
+}
+
 func main() {
 	db.Connect()
+	startAllTimers()
 	server()
 	defer db.Disconnect()
 
