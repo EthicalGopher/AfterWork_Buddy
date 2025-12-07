@@ -229,7 +229,9 @@ func server() {
 		go runTimer(ctx, email, timezone, timer)
 		return c.Status(201).JSON(timer)
 	})
-
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	})
 	app.Post("/stoptimer", func(c *fiber.Ctx) error {
 		email := c.Query("email")
 		id := c.Query("id")
